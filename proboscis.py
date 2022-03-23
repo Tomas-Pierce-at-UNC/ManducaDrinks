@@ -2,8 +2,10 @@
 from mothSoftware.cine import Cine
 from mothSoftware.cine_median import video_median
 import numpy
-from skimage import filters, morphology
+from skimage import filters, morphology, transform, measure, feature
 import math
+from matplotlib import pyplot
+from skimage.io import imshow
 
 def tallness_histogram(image) -> numpy.ndarray:
     verticals = filters.sobel_v(image)
@@ -140,8 +142,11 @@ def max_y_of_islands_point(islands):
     maxes = map(max_y_island_point, islands)
     max_y_pt = max(maxes, key = lambda point : point.y)
     return max_y_pt
+
+def auto_rotate(image):
+    pass
     
-def find_tips(filename):
+def find_tips(filename, display = False):
     vid = Cine(filename)
     median = video_median(vid)
     histogram = tallness_histogram(median)
@@ -151,26 +156,52 @@ def find_tips(filename):
     deltas = subtract(data,median)
     deltas[deltas > 0] = 0
     masks = numpy.ndarray(deltas.shape,dtype=bool)
+    tracking = []
+    
     for i,delta in enumerate(deltas):
         iso = filters.threshold_isodata(delta)
-        low = delta < iso
+        low = delta < (iso * 1.5)
         masks[i] = low
-
-    vid.close()
-    tracking = []
-    for mask in masks:
+        mask = masks[i]
         pix = get_on_pixels(mask)
         islands = form_islands(pix)
         big_isles = only_large_islands(islands)
         max_y_pt = max_y_of_islands_point(big_isles)
-        tracking.append((max_y_pt.x,max_y_pt.y))
+        tracking.append((i,max_y_pt.x,max_y_pt.y))
+        if display:
+            fig,axes = pyplot.subplots(ncols=2)
+            axes[0].imshow(delta)
+            axes[1].imshow(mask)
+            pyplot.show(block=False)
+            pyplot.pause(0.25)
+            pyplot.close("all")
 
+    vid.close()
     tips = numpy.array(tracking)
 
     return tips
+
+def align(reference, image_seq):
+    # on the to-do list
+    pass
+
+def illustrate(filename):
+    # demonstrate that the most likely cause is movement of tube.
+    # leads to natural solution of image registration via
+    # (ORB|SIFT), RANSAC, and warp() function
+    c = Cine(filename)
+    median = video_median(c)
+    f192 = c.get_ith_image(192)
+    c.close()
+    fig,axes = pyplot.subplots(ncols=2)
+    axes[0].imshow(median)
+    axes[1].imshow(f192)
+    axes[0].axvline(x=460)
+    axes[1].axvline(x=460)
+    pyplot.show()
     
 if __name__ == '__main__':
-    from matplotlib import pyplot
-    from skimage.io import imshow
+
     f = "/home/tomas/Projects/BIOL395/CineFilesOriginal/moth22_2022-02-07_Cine1.cine"
-    tips = find_tips(f)
+    #tips = find_tips(f)
+    illustrate(f)

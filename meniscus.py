@@ -21,18 +21,8 @@ import numpy
 import random
 import math
 from scipy import stats
+from matplotlib import pyplot
 
-
-# def apply(func, im_seq) -> numpy.ndarray:
-    
-#     images = []
-    
-#     for image in im_seq:
-#         #bytesImage = util.img_as_ubyte(func(image))
-#         result = func(image)
-#         images.append(result)
-    
-#     return numpy.array(images)
 
 # # IMAGE RESTRICTION TO TUBE SECTION
 # # KNOWN FAILURE MODE: TILTED TUBE
@@ -86,82 +76,6 @@ def get_column_bounds(tallness_histogram :numpy.ndarray):
     return (left - 10, right + 10)
 
 
-# def to_tube_restrict(image_seq :numpy.ndarray):
-#     left =   100000000000000 
-#     right = -100000000000000
-#     for image in image_seq:
-#         histogram = tallness_histogram(image)
-#         myleft,myright = get_column_bounds(histogram)
-#         if myleft < left:
-#             left = myleft
-#         if myright > right:
-#             right = myright
-#     return image_seq[:,:,left:right]
-
-# def show_random_image(seq):
-#     count = seq.shape[0]
-#     place = random.randint(0,count-1)
-#     image = seq[place]
-#     imshow(image)
-#     return place
-    
-# def open_unrestricted_cine_data(filename):
-#     cine = Cine(filename)
-#     data = cine.load_all()
-#     return data
-    
-# def open_restricted_cine_data(filename):
-#     cine = Cine(filename)
-#     data = cine.load_all()
-#     restricted = to_tube_restrict(data)
-#     cine.close()
-#     return restricted
-
-# def temporal_mode(image_seq):
-#     moderesult = stats.mode(image_seq)
-#     mode = moderesult.mode
-#     return mode[0] # fix shape issue
-
-# def make_background(image_seq):
-#     return numpy.quantile(image_seq, 0.25, 0)
-
-
-# def process(image_seq):
-#     edges = apply(filters.sobel, image_seq)
-#     background = make_background(edges)
-#     deltas = edges - background
-#     return deltas
-
-# def otsu_mask(image):
-#     otsu = filters.threshold_otsu(image)
-#     return image > otsu
-
-# def find_meniscus(image_seq):
-#     h_edges = apply(filters.sobel_h, image_seq)
-#     back = make_background(h_edges).astype(numpy.uint8)
-#     dif = h_edges - back
-#     #dif = apply(
-#         #lambda image : image / image.max(),
-#        # dif
-#        # )
-#     dilates = apply(
-#         morphology.dilation,
-#         dif
-#         )
-#     didilates = apply(
-#         morphology.dilation,
-#         dilates
-#         )
-#     masks = apply(otsu_mask, didilates)
-#     return masks
-
-# def task(images):
-#     mid = numpy.median(images, 0)
-#     mid = mid.astype(numpy.uint8)
-#     delta = images.astype(numpy.int16) - mid.astype(numpy.int16)
-#     delta[delta > 0] = 0
-#     return delta
-
 def openVideo(filename :str) -> Cine:
     return Cine(filename)
 
@@ -174,106 +88,39 @@ def subtract(leftImage, rightImage) -> numpy.ndarray:
     right = rightImage.astype(numpy.int16)
     return left - right
 
-def get_differences(video :Cine):
-    
-    median = video_median(video)
-    
-    images = video.gen_frames()
-    
-    def minus_bg(image):
-        return subtract(image, median)
-    
-    differences = apply(minus_bg, images)
-    
-    for delta in differences:
-        
-        yield delta
+def read_data(video :Cine, left, right):
+    images = []
+    frames = video.gen_frames()
+    for frame in frames:
+        restricted = frame[:,left:right]
+        images.append(restricted)
+    return numpy.array(images)
 
-def get_restrictions(video :Cine):
+def inverse(data :numpy.ndarray):
+    return -data + 255
 
-    images = video.gen_frames()
+def threshold(deltas):
+    iso = filters.threshold_isodata(deltas)
+    low = deltas < iso
+    return low
 
-    left = 1000000000000000
-    right = -100000000000000
-    
-    for image in images:
-        histogram = tallness_histogram(image)
-        myleft,myright = get_column_bounds(histogram)
-        if myleft < left:
-            left = myleft
-        if myright > right:
-            right = myright
-
-    return left,right
-
-def prep(video :Cine):
-    left,right = get_restrictions(video)
-    deltas = get_differences(video)
-    for delta in deltas:
-        yield delta[:,left:right]
-
-def make_mask(image):
-    image[image > 0] = 0
-    threshold = filters.threshold_isodata(image)
-    high = image > threshold
-    return ~high
-
-def get_masks(image_seq):
-
-    for image in image_seq:
-
-        yield make_mask(image)
-
-def isolate_meniscus(masks_seq):
-
-    for mask in masks_seq:
-
-        yield morphology.erosion(mask)
-
-def find_meniscus_canidates(processed_image):
-    blobs = feature.blob_log(processed_image)
-    #filter by sigma for plausible sizes
-    canidates = blobs[blobs[:,2] > 1.0]
-    canidates = canidates[canidates[:,2] < 10.0]
-    return canidates
-##
-##def get_positions(processed_seq):
-##
-##    for image in processed_seq:
-##
-##        yield find_meniscus(image)
-##
-
-def accumulate_meniscus_canidates(processed_sequence):
-
-    for i,image in enumerate(processed_sequence):
-
-        yield (i,find_meniscus_canidates(image))
-
-
-def shared_x_meniscus(pairs):
-    frequencies = {}
-    values = []
-
-    for i, canidate_list in pairs:
-        for canidate in canidate_list:
-            y,x,sigma = canidate
-            if x in frequencies:
-                frequencies[x] += 1
-            else:
-                frequencies[x] = 1
-
-            potential = (i,y,x,sigma)
-            values.append(potential)
-
-    data = numpy.array(values)
-    
-    x_coord_maxed = None
-    x_coord_maxed_count = 0
-    
-    for x,count in frequencies.items():
-        if count > x_coord_maxed_count:
-            x_coord_maxed = x
-            x_coord_maxed_count = count
-
-    return data[data[:,2] == x_coord_maxed]
+def isolate_meniscus(filename, display = False):
+    vid = Cine(filename)
+    median = video_median(vid)
+    histogram = tallness_histogram(median)
+    left,right = get_column_bounds(histogram)
+    median = median[:,left:right]
+    data = read_data(vid, left, right)
+    deltas = subtract(data,median)
+    isolated = threshold(deltas)
+    vid.close()
+    if display:
+        for i in range(len(data)):
+            fig,axes = pyplot.subplots(ncols=3)
+            axes[0].imshow(data[i])
+            axes[1].imshow(deltas[i])
+            axes[2].imshow(isolated[i])
+            pyplot.show(block=False)
+            pyplot.pause(0.25)
+            pyplot.close("all")
+    return isolated
