@@ -6,14 +6,16 @@ from skimage import filters, morphology, transform, measure, feature
 #import math
 from matplotlib import pyplot
 from skimage.io import imshow
+from alignment import register
 from point import Point
 from common import tallness_histogram, magnitude_percent_difference, get_column_bounds
 
-def read_data(video :Cine, left,right) -> numpy.ndarray:
+def read_data(video :Cine, left,right, median) -> numpy.ndarray:
     images = []
     frames = video.gen_frames()
     for frame in frames:
-        restricted = frame[:,left:right]
+        aligned = register(median,frame)
+        restricted = aligned[:,left:right]
         images.append(restricted)
     return numpy.array(images)
 
@@ -82,7 +84,7 @@ def find_tips(filename, display = False):
     median = video_median(vid)
     histogram = tallness_histogram(median)
     left,right = get_column_bounds(histogram)
-    data = read_data(vid,left,right)
+    data = read_data(vid,left,right,median)
     median = median[:,left:right]
     deltas = subtract(data,median)
     deltas[deltas > 0] = 0

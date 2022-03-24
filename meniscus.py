@@ -58,37 +58,38 @@ def threshold(deltas):
     low = deltas < iso
     return low
 
-def isolate_meniscus(filename, debug = False):
-    vid = Cine(filename)
-    median = video_median(vid)
-    left,right = get_col_bounds(median)
-    scene = median[:,left:right]
-    data = read_data(vid,left,right)
-    deltas = subtract(data,scene)
-    deltas[deltas > 0] = 0
-    masks = numpy.ndarray(deltas.shape, dtype=bool)
-    
-    if debug:
-        edges = []
-        mag_edges = []
-        debug_masks = []
-        
-    for i,frame in enumerate(deltas):
-        h_edges = filters.sobel_h(frame)
-        edge_mag = numpy.abs(h_edges)
-        li = filters.threshold_li(edge_mag)
-        mask = edge_mag > li
-        opened = morphology.opening(mask)
-        masks[i] = opened
-        
-        if debug:
-            edges.append(h_edges)
-            mag_edges.append(mag_edges)
-            debug_masks.append(mask)
-
-    if debug:
-        return scene,deltas,edges,mag_edges,masks, debug_masks
-
-    return masks
-
-def 
+##def isolate_meniscus(filename, debug = False):
+##    vid = Cine(filename)
+##    median = video_median(vid)
+##    left,right = get_col_bounds(median)
+##    scene = median[:,left:right]
+##    data = read_data(vid,left,right)
+##    deltas = subtract(data,scene)
+##    deltas[deltas > 0] = 0
+##    masks = numpy.ndarray(deltas.shape, dtype=bool)
+##    
+##    if debug:
+##        edges = []
+##        mag_edges = []
+##        debug_masks = []
+##        
+##    for i,frame in enumerate(deltas):
+##        h_edges = filters.sobel_h(frame)
+##        edge_mag = numpy.abs(h_edges)
+##        li = filters.threshold_li(edge_mag)
+##        mask = edge_mag > li
+##        #opened = morphology.opening(mask)
+##        eroded = morphology.erosion(mask)
+##        masks[i] = eroded
+##        
+##        if debug:
+##            edges.append(h_edges)
+##            mag_edges.append(mag_edges)
+##            debug_masks.append(mask)
+##
+##    if debug:
+##        return scene,deltas,edges,mag_edges,masks, debug_masks
+##
+##    return masks
+##
+##
