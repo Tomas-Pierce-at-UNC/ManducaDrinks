@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+
 """
 Created on Wed Mar  9 13:40:03 2022
 
@@ -9,8 +8,8 @@ Created on Wed Mar  9 13:40:03 2022
 # This sort of works. A little.
 # Outcomes are best with videos tagged 'hover' and 'freeflight'
 
-from mothSoftware.cine import Cine
-from mothSoftware.cine_median import video_median
+from cinelib import Cine
+from cinelib import video_median
 from skimage.io import imshow
 from skimage import filters
 from skimage import morphology
@@ -22,59 +21,14 @@ import random
 import math
 from scipy import stats
 from matplotlib import pyplot
+from common import tallness_histogram, magnitude_percent_difference, get_column_bounds
+from point import Point
 
 
-# # IMAGE RESTRICTION TO TUBE SECTION
-# # KNOWN FAILURE MODE: TILTED TUBE
-# # KNOWN SUCCESS MODE: FREE FLYING MOTH
-
-def tallness_histogram(image) -> numpy.ndarray:
-    verticals = filters.sobel_v(image)
-    magnitudes = numpy.abs(verticals)
-    threshold = filters.threshold_isodata(magnitudes)
-    mask = magnitudes > threshold
-    mask = morphology.skeletonize(mask)
-    
-    tallnesses = []
-    
-    for i in range(mask.shape[1]):
-        col = mask[:,i]
-        total = col.sum()
-        tallnesses.append((i,total))
-    
-    tallnesses.sort(key=lambda x : x[1], reverse=True)
-    
-    return numpy.array(tallnesses)
-
-def magnitude_percent_difference(baseline, comparison):
-    """What is the difference between baseline and comparison
-    as a percentage of baseline?"""
-    delta = abs(baseline - comparison)
-    ratio = float(delta) / float(baseline)
-    percent = ratio * 100
-    return percent
-    
-
-def get_column_bounds(tallness_histogram :numpy.ndarray):
-    # one side boundary
-    side_a = tallness_histogram[0][0]
-    # side boundary tallness
-    side_a_tallness = tallness_histogram[0][1]
-    
-    side_b = None
-    
-    for i in range(1,tallness_histogram.shape[0]):
-        local_tallness = tallness_histogram[i][1]
-        side_b = tallness_histogram[i][0]
-        mpd = magnitude_percent_difference(side_a_tallness,local_tallness)
-        if mpd > 50:
-            break
-    
-    left = min(side_a,side_b)
-    right = max(side_a,side_b)
-    
-    return (left - 10, right + 10)
-
+def get_col_bounds(image):
+    histogram = tallness_histogram(image)
+    left,right = get_column_bounds(histogram)
+    return left,right
 
 def openVideo(filename :str) -> Cine:
     return Cine(filename)
@@ -104,23 +58,37 @@ def threshold(deltas):
     low = deltas < iso
     return low
 
-def isolate_meniscus(filename, display = False):
+def isolate_meniscus(filename, debug = False):
     vid = Cine(filename)
     median = video_median(vid)
-    histogram = tallness_histogram(median)
-    left,right = get_column_bounds(histogram)
-    median = median[:,left:right]
-    data = read_data(vid, left, right)
-    deltas = subtract(data,median)
-    isolated = threshold(deltas)
-    vid.close()
-    if display:
-        for i in range(len(data)):
-            fig,axes = pyplot.subplots(ncols=3)
-            axes[0].imshow(data[i])
-            axes[1].imshow(deltas[i])
-            axes[2].imshow(isolated[i])
-            pyplot.show(block=False)
-            pyplot.pause(0.25)
-            pyplot.close("all")
-    return isolated
+    left,right = get_col_bounds(median)
+    scene = median[:,left:right]
+    data = read_data(vid,left,right)
+    deltas = subtract(data,scene)
+    deltas[deltas > 0] = 0
+    masks = numpy.ndarray(deltas.shape, dtype=bool)
+    
+    if debug:
+        edges = []
+        mag_edges = []
+        debug_masks = []
+        
+    for i,frame in enumerate(deltas):
+        h_edges = filters.sobel_h(frame)
+        edge_mag = numpy.abs(h_edges)
+        li = filters.threshold_li(edge_mag)
+        mask = edge_mag > li
+        opened = morphology.opening(mask)
+        masks[i] = opened
+        
+        if debug:
+            edges.append(h_edges)
+            mag_edges.append(mag_edges)
+            debug_masks.append(mask)
+
+    if debug:
+        return scene,deltas,edges,mag_edges,masks, debug_masks
+
+    return masks
+
+def 
