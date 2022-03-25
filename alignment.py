@@ -38,7 +38,7 @@ def register(reference,image):
         clip = True,
         preserve_range = True
         )
-    return warped
+    return warped.astype(image.dtype)
 
 if __name__ == '__main__':
     from cinelib import Cine, video_median

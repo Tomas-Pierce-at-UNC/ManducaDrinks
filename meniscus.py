@@ -23,6 +23,7 @@ from scipy import stats
 from matplotlib import pyplot
 from common import tallness_histogram, magnitude_percent_difference, get_column_bounds
 from point import Point
+from alignment import register
 
 
 def get_col_bounds(image):
@@ -42,11 +43,12 @@ def subtract(leftImage, rightImage) -> numpy.ndarray:
     right = rightImage.astype(numpy.int16)
     return left - right
 
-def read_data(video :Cine, left, right):
+def read_data(video :Cine, left, right, median):
     images = []
     frames = video.gen_frames()
     for frame in frames:
-        restricted = frame[:,left:right]
+        aligned = register(median, frame)
+        restricted = aligned[:,left:right]
         images.append(restricted)
     return numpy.array(images)
 
@@ -93,3 +95,44 @@ def threshold(deltas):
 ##    return masks
 ##
 ##
+
+if __name__ == '__main__':
+
+    fname = "/home/tomas/Projects/BIOL395/CineFilesOriginal/moth22_2022-02-01b_Cine1.cine"
+    vid = Cine(fname)
+    median = video_median(vid)
+    count = vid.image_count()
+    left,right = get_col_bounds(median)
+    res_median = median[:,left:right]
+    images = []
+    for i in range(0,count):
+        frame = vid.get_ith_image(i)
+        restricted = frame[:,left:right]
+        aligned = register(res_median,restricted)
+        sub = subtract(aligned,res_median)
+        images.append(sub)
+        print('.',end='')
+        if i % 50 == 0:
+            print('')
+    deltas = numpy.array(images)
+    vid.close()
+    rows = []
+    for i,delta in enumerate(deltas):
+        li2 = filters.threshold_li(delta) * 2
+        low = delta < li2
+        blobs = feature.blob_log(low)
+        multi_pix = blobs[blobs[:,2] > 1]
+        row = multi_pix[:,0].mean()
+        rows.append(row)
+        print(',',end='')
+        if i % 50 == 0:
+            print('')
+    rows = numpy.array(rows)
+    pyplot.plot(rows)
+    #median = video_median(vid)
+    #left,right = get_col_bounds(median)
+    #data = read_data(vid,left,right,median)
+    #vid.close()
+    #res_median = median[:,left:right]
+    #deltas = subtract(data,res_median)
+    
